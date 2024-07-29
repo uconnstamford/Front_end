@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UConn Sentiment Data Manager</title>
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+</head>
+
+<body>
+
+  <div class="menuBar">
+    <h1 class="topText">UConn Sentiment Data Manager</h1>
+
+    <hr>
+  </div>
+
+  <div class="sideNav" id="sideNav">
+    <p class="subtext" style="margin: 4px;">v1.0.0</p>
+    <a href="company_info"><button class="menuButton"><span
+          class="material-symbols-outlined">add_business</span></button></a>
+    <a href="keyword_lists"><button class="menuButton"><span class="material-symbols-outlined">fact_check</span></button></a>
+    <a href="info_drill"><button class="menuButton"><span class="material-symbols-outlined">tools_power_drill</span></button></a>
+    <a href="view_data"><button class="menuButton"><span
+          class="material-symbols-outlined">query_stats</span></button></a>
+    <button class="menuButton" type="button" disabled><span
+        class="material-symbols-outlined">developer_board</span></button>
+
+    <a href="#"><button class="logoutButton"><span class="material-symbols-outlined">logout</span></button></a>
+  </div>
+
+  <div id="div-page-mask" style="display: none;"></div>
+
+  <div id="div-main-content">
+    <h2>Model Control</h2>
+
+    <div id="div-create-task">
+      <h4>Note: Each task is for a single ticker. Currently, all conference calls are processed from the selected ticker.</h4>
+      <h3>Step 1. Prepare Data</h3>
+      <a href="company_info"><button><span class="material-symbols-outlined">add_business</span></button></a>
+      <a> Create ticker entry in Company Info table if is not already present.</a><br><br>
+      <button onclick="showUploadDialog()">Upload Conference Calls</button>
+      <dialog open id="dialog-upload_file" style="display: none;">
+        <iframe src="/upload_prompt" style="border: none; width: 300px; height: 200px;" scrolling="no"></iframe>
+      </dialog>
+
+
+      <h3>Step 2. Task Settings</h3>
+
+      <label>Select ticker for processing: </label>
+      <select id="inputFileBox">
+        {% for tic in tickers %}
+        <option value="{{  tic  }}">{{ tic }}</option>
+        {% endfor %}
+      </select><br><br>
+
+      <label>Keyword List:</label>
+      <select id="keywordListBox">
+        <option value="" selected>None</option>
+        {% for kind in kinds %}
+        <option value="{{  kind  }}">{{ kind }}</option>
+        {% endfor %}
+      </select>
+
+      <input type="checkbox" name="generic" id="generic" checked>
+      <label for="generic">Include Generic Keyword List</label>
+
+      <h3>Step 3. Confirm and Output</h3>
+      <label>Kind output:</label>
+      <input type="text" disabled><br><br>
+
+      <button class="submitButton" onclick="submitTask()">Submit for Processing</button>
+
+      <dialog open id="dialog-task_response" style="display: none;">
+        <a id="waiting" style="color: rgb(0, 102, 198);"><span class="material-symbols-outlined">pending</span> Creating Task, Please Wait...</a><br><br>
+        <a id="response-tag"></a><br><br>
+        <button id="button-close-task_response" onclick="hideTaskDialog()" style="width: 350px;" disabled>Close</button>
+      </dialog>
+
+    </div>
+  </div>
+
+  <script>
+    function maskPage() {
+      document.getElementById("div-page-mask").style.display = "block"
+    }
+    function unmaskPage() {
+      document.getElementById("div-page-mask").style.display = "none"
+    }
+
+    function showUploadDialog() {
+      maskPage()
+      document.getElementById("dialog-upload_file").style.display = "block"
+    }
+    function hideUploadDialog() {
+      unmaskPage()
+      document.getElementById("dialog-upload_file").style.display = "none"
+    }
+
+    function showTaskDialog() {
+      maskPage()
+      document.getElementById("dialog-task_response").style.display = "block"
+      document.getElementById("button-close-task_response").disabled = true
+      document.getElementById("response-tag").style.display = "none"
+      document.getElementById("waiting").style.display = "block"
+    }
+    function hideTaskDialog() {
+      unmaskPage()
+      document.getElementById("dialog-task_response").style.display = "none"
+    }
+
+    function taskSuccess(data) {
+      document.getElementById("button-close-task_response").disabled = false
+      document.getElementById("waiting").style.display = "none"
+      document.getElementById("response-tag").style.display = "block"
+      document.getElementById("response-tag").style.color = "rgb(0, 198, 53)"
+      document.getElementById("response-tag").innerHTML = '<span class="material-symbols-outlined">done</span> ' + data
+    }
+
+    function taskFailed(data) {
+      document.getElementById("button-close-task_response").disabled = false
+      document.getElementById("waiting").style.display = "none"
+      document.getElementById("response-tag").style.display = "block"
+      document.getElementById("response-tag").style.color = "hsl(0, 100%, 39%)"
+      document.getElementById("response-tag").innerHTML = '<span class="material-symbols-outlined">done</span> ' + data
+    }
+
+    function submitTask() {
+      showTaskDialog()
+
+      yahooTicker = document.getElementById("inputFileBox").value
+      inputFile = document.getElementById("inputFileBox").value
+      keywordList = document.getElementById("keywordListBox").value
+      if (document.getElementById('generic').checked == true) {
+        keywordList = keywordList + ',Generic'
+      }
+
+      fetch("/create_task", {
+        method: "post",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          yahooTicker: yahooTicker,
+          inputFile: inputFile,
+          keywordList: keywordList,
+        })
+      })
+      .then (response => {
+        if (response.ok) { // If response is successful HTTP status code (2xx)
+          return response.text();
+        } else {
+          throw new Error(response.text())
+        }
+      })
+      .then (text => {
+        taskSuccess(text)
+      })
+      .catch (error => {
+        taskFailed(error)
+      })
+    }
+  </script>
+
+</body>
+
+</html>
